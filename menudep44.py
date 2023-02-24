@@ -66,7 +66,7 @@ while True:
     # Exécution de l'option sélectionnée si la touche entrée est pressée
     elif touche == curses.KEY_ENTER or touche == 10:
         if choix == 0:
-            exec(open("fichier1.py").read())
+            exec(open("effacement.py").read())
         elif choix == 1:
             exec(open("fichier2.py").read())
 
