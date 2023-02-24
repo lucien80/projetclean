@@ -4,10 +4,10 @@ import subprocess
 import sys
 
 # Chemin de la clé USB à scanner
-usb_path = '/dev/sda'
+usb_path = '/mnt/ubs1'
 
 # Chemin de la clé USB de destination
-dst_path = '/dev/sdb'
+dst_path = '/mnt/usb2'
 
 # Liste des extensions de fichiers exécutables à filtrer
 executable_extensions = ['.exe', '.bat', '.sh']
