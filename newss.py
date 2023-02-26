@@ -1,57 +1,47 @@
 import os
 import sys
+import time
+import glob
 import subprocess
-import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
 
-# Fonction pour analyser une clé USB avec ClamAV
-def scan_usb(path, progress):
-    result = subprocess.run(['clamscan', '-r', '--bell', path], stdout=subprocess.PIPE)
-    output = result.stdout.decode('utf-8')
-    progress['value'] = 100
-    if 'Infected files: 0' in output:
-        messagebox.showinfo('Résultat de l\'analyse', 'Aucun virus ou logiciel malveillant détecté.')
-    else:
-        messagebox.showwarning('Résultat de l\'analyse', 'Virus ou logiciel malveillant détecté!\n\n' + output)
+def analyze_usb():
+    # Recherche de toutes les clés USB connectées
+    devices = glob.glob('/media/*')
+    print("Clés USB connectées :")
+    for i, device in enumerate(devices):
+        print(f"{i+1}. {device} ({round(get_usb_size(device)/1024/1024/1024, 2)} GB)")
+    print("")
 
-# Fonction pour obtenir la liste des clés USB connectées
-def get_usb_list():
-    drives = []
-    bitmask = subprocess.check_output(['lsblk', '-n', '-o', 'NAME,SIZE,TYPE']).decode('utf-8')
-    lines = bitmask.split('\n')
-    for line in lines:
-        parts = line.split()
-        if len(parts) == 3 and parts[2] == 'part':
-            drives.append(parts[0] + ' (' + parts[1] + ')')
-    return drives
+    # Sélection de la clé USB à analyser
+    selected_device = int(input("Choisissez la clé USB à analyser (entrez le numéro) : ")) - 1
+    selected_device = devices[selected_device]
 
-# Interface graphique pour choisir une clé USB et démarrer l'analyse
-def main():
-    root = tk.Tk()
-    root.title('Analyseur de Clés USB')
-    root.geometry('400x200')
+    # Demande si l'utilisateur souhaite monter la clé USB s'il n'est pas déjà monté
+    if not selected_device.startswith('/media/'):
+        mount_device = input(f"La clé USB {selected_device} n'est pas montée. Souhaitez-vous la monter automatiquement ? (o/n) : ")
+        if mount_device.lower() == 'o':
+            mount_point = '/media/' + selected_device.split('/')[-1]
+            os.makedirs(mount_point, exist_ok=True)
+            subprocess.run(['mount', selected_device, mount_point])
+            selected_device = mount_point
 
-    label = tk.Label(root, text='Sélectionnez une clé USB à analyser:')
-    label.pack(pady=10)
+    # Analyse de la clé USB avec ClamAV
+    print(f"Analyse de la clé USB {selected_device} en cours...")
+    result = subprocess.run(['clamscan', '-r', selected_device], stdout=subprocess.PIPE)
+    result = result.stdout.decode('utf-8')
 
-    usb_list = get_usb_list()
-    if not usb_list:
-        messagebox.showerror('Erreur', 'Aucune clé USB connectée.')
-        sys.exit(1)
+    # Affichage des résultats de l'analyse
+    print(result)
 
-    selected_usb = tk.StringVar()
-    selected_usb.set(usb_list[0])
-    dropdown = ttk.OptionMenu(root, selected_usb, *usb_list)
-    dropdown.pack(pady=10)
-
-    progress = ttk.Progressbar(root, orient='horizontal', length=200, mode='determinate')
-    progress.pack(pady=10)
-
-    scan_button = tk.Button(root, text='Analyser', command=lambda: scan_usb('/dev/' + selected_usb.get().split()[0], progress))
-    scan_button.pack(pady=10)
-
-    root.mainloop()
+def get_usb_size(path):
+    total = 0
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.is_file():
+                total += entry.stat().st_size
+            elif entry.is_dir():
+                total += get_usb_size(entry.path)
+    return total
 
 if __name__ == '__main__':
-    main()
+    analyze_usb()
