@@ -1,62 +1,57 @@
 import os
-import shutil
-import subprocess
 import sys
-from tqdm import tqdm
+import subprocess
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
 
-# Chemin d'accès de ClamAV
-CLAMAV_PATH = "/usr/bin/clamscan"
+# Fonction pour analyser une clé USB avec ClamAV
+def scan_usb(path, progress):
+    result = subprocess.run(['clamscan', '-r', '--bell', path], stdout=subprocess.PIPE)
+    output = result.stdout.decode('utf-8')
+    progress['value'] = 100
+    if 'Infected files: 0' in output:
+        messagebox.showinfo('Résultat de l\'analyse', 'Aucun virus ou logiciel malveillant détecté.')
+    else:
+        messagebox.showwarning('Résultat de l\'analyse', 'Virus ou logiciel malveillant détecté!\n\n' + output)
 
-# Chemin d'accès du répertoire de destination des fichiers sains
-DEST_DIR = "/media/usb_saine/"
+# Fonction pour obtenir la liste des clés USB connectées
+def get_usb_list():
+    drives = []
+    bitmask = subprocess.check_output(['lsblk', '-n', '-o', 'NAME,SIZE,TYPE']).decode('utf-8')
+    lines = bitmask.split('\n')
+    for line in lines:
+        parts = line.split()
+        if len(parts) == 3 and parts[2] == 'part':
+            drives.append(parts[0] + ' (' + parts[1] + ')')
+    return drives
 
-def is_infected(file_path):
-    """Vérifie si le fichier spécifié est infecté par un virus en utilisant ClamAV."""
-    result = subprocess.run([CLAMAV_PATH, "-q", file_path], stdout=subprocess.PIPE)
-    return result.returncode != 0
-
+# Interface graphique pour choisir une clé USB et démarrer l'analyse
 def main():
-    # Recherche de toutes les clés USB connectées
-    devices = [os.path.join("/dev", device) for device in os.listdir("/dev") if device.startswith("sd")]
-    
-    # Si aucune clé USB n'est trouvée, on quitte le script
-    if not devices:
-        print("Aucune clé USB n'a été trouvée.")
-        sys.exit(0)
-    
-    # Sélectionne la première clé USB trouvée comme source de fichiers à analyser
-    src_device = devices[0]
-    print(f"Source device: {src_device}")
-    
-    # Montage de la clé USB source pour la lecture des fichiers
-    src_mount_dir = "/mnt/src_usb"
-    os.makedirs(src_mount_dir, exist_ok=True)
-    subprocess.run(["sudo", "mount", "-t", "auto", src_device, src_mount_dir], check=True)
-    print(f"Source mount point: {src_mount_dir}")
-    
-    # Recherche de tous les fichiers sur la clé USB source
-    src_files = []
-    for root, dirs, files in os.walk(src_mount_dir):
-        for name in files:
-            src_files.append(os.path.join(root, name))
-    
-    # Création du répertoire de destination des fichiers sains
-    os.makedirs(DEST_DIR, exist_ok=True)
-    print(f"Destination directory: {DEST_DIR}")
-    
-    # Analyse de chaque fichier et copie des fichiers sains vers la clé USB de destination
-    for file_path in tqdm(src_files, desc="Analyzing files", unit="file"):
-        if os.path.isfile(file_path):
-            if is_infected(file_path):
-                print(f"File {file_path} is infected")
-            else:
-                shutil.copy2(file_path, DEST_DIR)
-    
-    # Démontage de la clé USB source
-    subprocess.run(["sudo", "umount", src_mount_dir], check=True)
-    print(f"Source unmounted: {src_mount_dir}")
-    
-    # Affichage d'un résumé des résultats
-    print("Summary:")
-    print(f"Files analyzed: {len(src_files)}")
-    print(f"Safe files copied: {len(os.listdir(DEST_DIR))}")
+    root = tk.Tk()
+    root.title('Analyseur de Clés USB')
+    root.geometry('400x200')
+
+    label = tk.Label(root, text='Sélectionnez une clé USB à analyser:')
+    label.pack(pady=10)
+
+    usb_list = get_usb_list()
+    if not usb_list:
+        messagebox.showerror('Erreur', 'Aucune clé USB connectée.')
+        sys.exit(1)
+
+    selected_usb = tk.StringVar()
+    selected_usb.set(usb_list[0])
+    dropdown = ttk.OptionMenu(root, selected_usb, *usb_list)
+    dropdown.pack(pady=10)
+
+    progress = ttk.Progressbar(root, orient='horizontal', length=200, mode='determinate')
+    progress.pack(pady=10)
+
+    scan_button = tk.Button(root, text='Analyser', command=lambda: scan_usb('/dev/' + selected_usb.get().split()[0], progress))
+    scan_button.pack(pady=10)
+
+    root.mainloop()
+
+if __name__ == '__main__':
+    main()
