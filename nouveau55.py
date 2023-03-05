@@ -121,4 +121,5 @@ def unmount_devices(selected_device, destination_device):
 
 if __name__ == '__main__':
     update_clamav()
-   
+    selected_device, destination_device = analyze_usb()
+    unmount_devices(selected_device, destination_device)
